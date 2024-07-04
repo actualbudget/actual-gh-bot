@@ -1,9 +1,12 @@
 import { Probot } from 'probot';
 
+import { checkFeatureFlag } from '../config.js';
 import PullRequest from '../classes/PullRequest.js';
 
 export default (app: Probot) => {
   app.on(['check_suite.completed'], async context => {
+    if (!(await checkFeatureFlag(context, 'enableFailingCI'))) return;
+
     const commitSha = context.payload.check_suite.head_sha;
     const prNum = context.payload.check_suite.pull_requests[0].number;
 
