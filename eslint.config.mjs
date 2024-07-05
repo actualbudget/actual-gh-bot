@@ -24,7 +24,7 @@ export default [
     'plugin:prettier/recommended',
   ),
   {
-    files: ['{src,test}/**/*.ts'],
+    files: ['{src,test,netlify}/**/*.ts'],
     plugins: {
       '@typescript-eslint': typescriptEslint,
       prettier,
