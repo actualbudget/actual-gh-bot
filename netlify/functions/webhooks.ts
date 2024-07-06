@@ -6,6 +6,7 @@ import app from '../../src/index';
 const handler: Handler = async event => {
   const probot = createProbot();
   try {
+    probot.log.info('loading app');
     await probot.load(app);
 
     const deliveryHeader = (event.headers['X-GitHub-Delivery'] ||
@@ -19,8 +20,10 @@ const handler: Handler = async event => {
       id: deliveryHeader,
       name: nameHeader,
       signature: sigHeader,
-      payload: event.body ? JSON.parse(event.body) : '',
+      payload: event.body ?? '',
     });
+
+    probot.log.info('webhook verified');
 
     return {
       statusCode: 200,
