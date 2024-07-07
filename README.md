@@ -74,3 +74,8 @@ This project is licensed under the ISC License. See the [LICENSE](LICENSE) file 
 
 For any questions or issues, please open an [issue](https://github.com/actualbudget/actual-gh-bot/issues).
 
+## Sponsors
+
+Thanks to our wonderful sponsors who make Actual budget possible!
+
+<a href="https://www.netlify.com"> <img src="https://www.netlify.com/v3/img/components/netlify-color-accent.svg" alt="Deploys by Netlify" /> </a>
