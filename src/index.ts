@@ -59,5 +59,6 @@ export default (app: Probot) => {
     },
   );
 
+  app.log.info('probot loaded');
   Handlers(app);
 };
