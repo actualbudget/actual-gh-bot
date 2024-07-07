@@ -12,7 +12,7 @@ export default (app: Probot) => {
 
     const pr = await PullRequest.getFromNumber(context, prNum);
 
-    if (pr.wip) return;
+    if (pr.wip || pr.data.draft) return;
 
     const suites = (
       await context.octokit.checks.listSuitesForRef({
