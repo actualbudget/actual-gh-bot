@@ -105,7 +105,7 @@ export default class PullRequest {
   }
 
   async getReviewStatus(): Promise<
-    'changesRequested' | 'needsMoreApprovals' | 'approved'
+    'changesRequested' | 'needsMoreApprovals' | 'approved' | undefined
   > {
     const reviews = (
       await this.octokit.pulls.listReviews({
@@ -118,6 +118,8 @@ export default class PullRequest {
         r.commit_id === this.data.head.sha &&
         ['APPROVED', 'CHANGES_REQUESTED'].includes(r.state),
     );
+
+    if (reviews.length < 1) return;
 
     const latestReviewsObj: { [key: number]: { state: string; time: number } } =
       {};
