@@ -7,6 +7,8 @@ export default (app: Probot) => {
     const pr = new PullRequest(context);
     const reviewStatus = await pr.getReviewStatus();
 
+    if (!reviewStatus) return;
+
     await pr.addLabel(reviewStatus);
   });
 };
