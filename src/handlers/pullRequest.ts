@@ -1,4 +1,6 @@
 import { Probot } from 'probot';
+
+import { labels } from '../labels.js';
 import PullRequest from '../classes/PullRequest.js';
 
 export default (app: Probot) => {
@@ -7,7 +9,7 @@ export default (app: Probot) => {
 
     let title = pr.data.title;
 
-    if (!pr.wip) {
+    if (!pr.wip && !pr.data.draft) {
       title = `[WIP] ${title}`;
       await pr.setTitle(title);
     }
@@ -35,5 +37,19 @@ export default (app: Probot) => {
     } else {
       await pr.clearLabels();
     }
+  });
+
+  app.on(['pull_request.converted_to_draft'], async context => {
+    const pr = new PullRequest(context);
+    await pr.addLabel('wip');
+  });
+
+  app.on(['pull_request.ready_for_review'], async context => {
+    const pr = new PullRequest(context);
+
+    const title = pr.data.title.replace(labels.wip.regex ?? '', '');
+    await pr.setTitle(title);
+
+    await pr.addLabel('readyForReview');
   });
 };
