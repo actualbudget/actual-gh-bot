@@ -3,6 +3,11 @@ import { Context, ProbotOctokit } from 'probot';
 import { labels } from '../labels.js';
 
 type TContext = Context<'pull_request' | 'pull_request_review'>;
+type ReviewStatus =
+  | 'changesRequested'
+  | 'needsMoreApprovals'
+  | 'approved'
+  | 'readyForReview';
 
 type BarebonesContext = {
   octokit: ProbotOctokit;
@@ -104,9 +109,7 @@ export default class PullRequest {
     }
   }
 
-  async getReviewStatus(): Promise<
-    'changesRequested' | 'needsMoreApprovals' | 'approved' | undefined
-  > {
+  async getReviewStatus(): Promise<ReviewStatus> {
     const reviews = (
       await this.octokit.pulls.listReviews({
         owner: this.owner,
@@ -119,7 +122,7 @@ export default class PullRequest {
         ['APPROVED', 'CHANGES_REQUESTED'].includes(r.state),
     );
 
-    if (reviews.length < 1) return;
+    if (reviews.length < 1) return 'readyForReview';
 
     const latestReviewsObj: { [key: number]: { state: string; time: number } } =
       {};
