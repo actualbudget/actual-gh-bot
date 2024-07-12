@@ -29,6 +29,16 @@ export default (app: Probot) => {
     }
   });
 
+  app.on(['pull_request.synchronize'], async context => {
+    const pr = new PullRequest(context);
+
+    if (pr.wip || pr.data.draft) return;
+
+    const reviewStatus = await pr.getReviewStatus();
+
+    await pr.addLabel(reviewStatus);
+  });
+
   app.on(['pull_request.closed'], async context => {
     const pr = new PullRequest(context);
 
