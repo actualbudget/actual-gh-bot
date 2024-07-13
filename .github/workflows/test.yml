@@ -3,7 +3,7 @@ name: Test
 on:
   push:
     branches:
-      - master
+      - main
   pull_request:
     branches: '*'
 
@@ -25,5 +25,5 @@ jobs:
       - name: Install
         run: yarn --immutable
         if: steps.cache.outputs.cache-hit != 'true'
-      - name: Lint
+      - name: Test
         run: yarn test:ci
