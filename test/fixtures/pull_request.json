@@ -1,0 +1,24 @@
+{
+  "pull_request": {
+    "title": "Test Pull Request",
+    "number": 1,
+    "state": "open",
+    "draft": false,
+    "head": {
+      "sha": "abc123"
+    },
+    "base": {
+      "ref": "master"
+    },
+    "labels": []
+  },
+  "repository": {
+    "name": "your-repo-name",
+    "owner": {
+      "login": "your-repo"
+    }
+  },
+  "installation": {
+    "id": 2
+  }
+}

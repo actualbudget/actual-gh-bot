@@ -1,4 +1,4 @@
-name: Build
+name: Test
 
 on:
   push:
@@ -8,7 +8,7 @@ on:
     branches: '*'
 
 jobs:
-  build:
+  test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -25,5 +25,5 @@ jobs:
       - name: Install
         run: yarn --immutable
         if: steps.cache.outputs.cache-hit != 'true'
-      - name: Build
-        run: yarn build
+      - name: Test
+        run: yarn test:ci
