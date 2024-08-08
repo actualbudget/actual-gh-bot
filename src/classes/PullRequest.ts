@@ -133,7 +133,7 @@ export default class PullRequest {
     ).data.map(u => u.id);
 
     const latestReviewsObj: {
-      [key: number]: { state: string; time: number; user: number };
+      [key: number]: { state: string; time: number };
     } = {};
 
     for (const r of reviews) {
@@ -142,10 +142,11 @@ export default class PullRequest {
       const user = r.user.id;
       const time = new Date(r.submitted_at).getTime();
 
+      if (!pushUsers.includes(user)) continue;
+
       const review = {
         state: r.state,
         time,
-        user,
       };
 
       if (!latestReviewsObj[user]) {
@@ -167,7 +168,7 @@ export default class PullRequest {
     }
 
     const approvingReviews = latestReviews.filter(
-      r => r.state === 'APPROVED' && pushUsers.includes(r.user),
+      r => r.state === 'APPROVED',
     ).length;
     const requiredReviews = await this.getRequiredReviews();
 
