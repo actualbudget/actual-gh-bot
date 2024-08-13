@@ -124,8 +124,17 @@ export default class PullRequest {
 
     if (reviews.length < 1) return 'readyForReview';
 
-    const latestReviewsObj: { [key: number]: { state: string; time: number } } =
-      {};
+    const pushUsers = (
+      await this.octokit.repos.listCollaborators({
+        owner: this.owner,
+        repo: this.repo,
+        permission: 'push',
+      })
+    ).data.map(u => u.id);
+
+    const latestReviewsObj: {
+      [key: number]: { state: string; time: number };
+    } = {};
 
     for (const r of reviews) {
       if (!r?.user?.id || !r.submitted_at) continue;
@@ -133,24 +142,26 @@ export default class PullRequest {
       const user = r.user.id;
       const time = new Date(r.submitted_at).getTime();
 
-      if (!latestReviewsObj[user]) {
-        latestReviewsObj[user] = {
-          state: r.state,
-          time,
-        };
+      if (!pushUsers.includes(user)) continue;
 
+      const review = {
+        state: r.state,
+        time,
+      };
+
+      if (!latestReviewsObj[user]) {
+        latestReviewsObj[user] = review;
         continue;
       }
 
       if (latestReviewsObj[user].time < time) {
-        latestReviewsObj[user] = {
-          state: r.state,
-          time,
-        };
+        latestReviewsObj[user] = review;
       }
     }
 
     const latestReviews = Object.values(latestReviewsObj);
+
+    if (!latestReviews.length) return 'readyForReview';
 
     if (latestReviews.filter(r => r.state === 'CHANGES_REQUESTED').length > 0) {
       return 'changesRequested';
@@ -165,6 +176,10 @@ export default class PullRequest {
       return 'needsMoreApprovals';
     }
 
-    return 'approved';
+    if (approvingReviews > 0) {
+      return 'approved';
+    }
+
+    return 'readyForReview';
   }
 }
