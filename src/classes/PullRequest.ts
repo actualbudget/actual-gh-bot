@@ -132,8 +132,19 @@ export default class PullRequest {
       })
     ).data.map(u => u.id);
 
+    console.log('\n**** reviews ****');
+    console.log(reviews);
+
+    console.log('\n**** push users ****');
+    console.log(pushUsers);
+
     const latestReviewsObj: {
-      [key: number]: { state: string; time: number };
+      [key: number]: {
+        state: string;
+        time: number;
+        username: string;
+        userId: number;
+      };
     } = {};
 
     for (const r of reviews) {
@@ -142,10 +153,10 @@ export default class PullRequest {
       const user = r.user.id;
       const time = new Date(r.submitted_at).getTime();
 
-      if (!pushUsers.includes(user)) continue;
-
       const review = {
         state: r.state,
+        username: r.user.login,
+        userId: user,
         time,
       };
 
@@ -159,7 +170,32 @@ export default class PullRequest {
       }
     }
 
-    const latestReviews = Object.values(latestReviewsObj);
+    const promises = [];
+    for (const r of Object.values(latestReviewsObj)) {
+      promises.push(
+        this.octokit.repos.getCollaboratorPermissionLevel({
+          owner: this.owner,
+          repo: this.repo,
+          username: r.username,
+        }),
+      );
+    }
+
+    console.log('\n**** alternative approach ****');
+    const newPushUsers = (await Promise.all(promises))
+      .filter(
+        ({ data }) =>
+          data.permission === 'write' || data.permission === 'admin',
+      )
+      .map(d => d.data?.user?.id);
+    console.log(newPushUsers);
+
+    const latestReviews = Object.values(latestReviewsObj).filter(({ userId }) =>
+      pushUsers.includes(userId),
+    );
+
+    console.log('\n**** latestReviews ****');
+    console.log(latestReviews);
 
     if (!latestReviews.length) return 'readyForReview';
 
