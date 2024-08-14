@@ -124,20 +124,6 @@ export default class PullRequest {
 
     if (reviews.length < 1) return 'readyForReview';
 
-    const pushUsers = (
-      await this.octokit.repos.listCollaborators({
-        owner: this.owner,
-        repo: this.repo,
-        permission: 'push',
-      })
-    ).data.map(u => u.id);
-
-    console.log('\n**** reviews ****');
-    console.log(reviews);
-
-    console.log('\n**** push users ****');
-    console.log(pushUsers);
-
     const latestReviewsObj: {
       [key: number]: {
         state: string;
@@ -170,32 +156,23 @@ export default class PullRequest {
       }
     }
 
-    const promises = [];
-    for (const r of Object.values(latestReviewsObj)) {
-      promises.push(
+    const reviewerPermissions = await Promise.all(
+      Object.values(latestReviewsObj).map(({ username }) =>
         this.octokit.repos.getCollaboratorPermissionLevel({
           owner: this.owner,
           repo: this.repo,
-          username: r.username,
+          username,
         }),
-      );
-    }
-
-    console.log('\n**** alternative approach ****');
-    const newPushUsers = (await Promise.all(promises))
-      .filter(
-        ({ data }) =>
-          data.permission === 'write' || data.permission === 'admin',
-      )
-      .map(d => d.data?.user?.id);
-    console.log(newPushUsers);
-
-    const latestReviews = Object.values(latestReviewsObj).filter(({ userId }) =>
-      pushUsers.includes(userId),
+      ),
     );
 
-    console.log('\n**** latestReviews ****');
-    console.log(latestReviews);
+    const pushReviewers = reviewerPermissions
+      .filter(({ data }) => ['write', 'admin'].includes(data.permission))
+      .map(d => d.data?.user?.id);
+
+    const latestReviews = Object.values(latestReviewsObj).filter(({ userId }) =>
+      pushReviewers.includes(userId),
+    );
 
     if (!latestReviews.length) return 'readyForReview';
 
