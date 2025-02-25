@@ -48,5 +48,6 @@
   "resolutions": {
     "rollup": "npm:@rollup/wasm-node"
   },
-  "type": "module"
+  "type": "module",
+  "packageManager": "yarn@4.6.0"
 }
