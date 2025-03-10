@@ -43,4 +43,10 @@ export const labels: Record<string, Label> = {
     description:
       'There are failing checks that must be fixed before it can be reviewed',
   },
+  mergeConflict: {
+    name: '🚨 merge conflict',
+    color: '#cc0000',
+    description:
+      'There are merge conflicts that must be fixed before it can be reviewed',
+  },
 };

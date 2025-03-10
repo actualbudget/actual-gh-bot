@@ -84,6 +84,19 @@ export default class PullRequest {
     });
   }
 
+  async removeLabel<LKey extends keyof typeof labels>(labelName: LKey) {
+    const newLabelList = this.data.labels
+      .map(l => l.name)
+      .filter(name => name !== labelName);
+
+    await this.octokit.issues.setLabels({
+      owner: this.owner,
+      repo: this.repo,
+      issue_number: this.number,
+      labels: newLabelList,
+    });
+  }
+
   async clearLabels() {
     await this.octokit.issues.setLabels({
       owner: this.owner,
