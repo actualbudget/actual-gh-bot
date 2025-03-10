@@ -1,7 +1,10 @@
-import { Probot } from 'probot';
+import { Context, Probot } from 'probot';
+import { components } from '@octokit/openapi-types';
 
 import { labels } from '../labels.js';
 import PullRequest from '../classes/PullRequest.js';
+
+type PullsListResponseData = components['schemas']['pull-request-simple'][];
 
 export default (app: Probot) => {
   app.on(['pull_request.opened', 'pull_request.reopened'], async context => {
@@ -62,4 +65,67 @@ export default (app: Probot) => {
 
     await pr.addLabel('readyForReview');
   });
+
+  app.on('push', async context => {
+    if (context.payload.ref !== 'refs/heads/master') return;
+
+    const { owner, repo } = context.repo();
+
+    const pullRequests = await getOpenPRsForBase(
+      context,
+      owner,
+      repo,
+      'master',
+    );
+
+    for (const prData of pullRequests) {
+      const { mergeable_state } = prData as unknown as PullsListResponseData & {
+        mergeable_state: string;
+      };
+      const isConflicted = mergeable_state === 'dirty';
+
+      const pr = await PullRequest.getFromNumber(context, prData.number);
+      const conflictLabel = pr.data.labels.find(
+        l => l.name === labels.mergeConflict.name,
+      );
+
+      if (isConflicted && !conflictLabel) {
+        await pr.addLabel('mergeConflict');
+      } else if (!isConflicted && conflictLabel) {
+        await pr.removeLabel(labels.mergeConflict.name);
+      }
+    }
+  });
 };
+
+async function getOpenPRsForBase(
+  context: Context,
+  owner: string,
+  repo: string,
+  base: string,
+): Promise<PullsListResponseData> {
+  let allPRs: PullsListResponseData = [];
+  let page = 1;
+  let tryMore: boolean = true;
+
+  while (tryMore) {
+    const { data } = await context.octokit.pulls.list({
+      owner,
+      repo,
+      state: 'open',
+      base,
+      per_page: 100,
+      page,
+    });
+
+    if (data.length === 0) {
+      tryMore = false;
+      break;
+    }
+
+    allPRs = allPRs.concat(data);
+    page++;
+  }
+
+  return allPRs as PullsListResponseData;
+}

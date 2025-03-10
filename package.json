@@ -27,7 +27,7 @@
     "@eslint/eslintrc": "^3.1.0",
     "@eslint/js": "^8.57.0",
     "@netlify/functions": "^2.8.0",
-    "@octokit/types": "^13.5.0",
+    "@octokit/openapi-types": "^24.0.0",
     "@octokit/webhooks-types": "^7.5.1",
     "@types/node": "^20.0.0",
     "@typescript-eslint/eslint-plugin": "^7.13.1",
