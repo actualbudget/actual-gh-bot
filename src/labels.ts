@@ -13,32 +13,32 @@ export const labels: Record<string, Label> = {
     description: 'Still under development, not yet ready for review',
   },
   readyForReview: {
-    name: ':mag: Ready for review',
+    name: ':mag: ready for review',
     color: '#334796',
-    description: 'Ready for review',
+    description: 'ready for review',
   },
   approved: {
-    name: ':white_check_mark: Approved',
+    name: ':white_check_mark: approved',
     color: '#0E8A16',
     description: 'Has been reviewed, approved and is ready for merge',
   },
   changesRequested: {
-    name: ':warning: Changes requested',
+    name: ':warning: changes requested',
     color: '#AA2626',
     description: 'Has been reviewed, and changes have been requested',
   },
   needsMoreApprovals: {
-    name: ':star2: Needs more approvals',
+    name: ':star2: needs more approvals',
     color: '#96C823',
     description: 'Needs more approvals',
   },
   merged: {
-    name: ':sparkles: Merged',
+    name: ':sparkles: merged',
     color: '#6F42C1',
     description: 'Merged successfully',
   },
   failingCI: {
-    name: ':x: Failing CI',
+    name: ':x: failing CI',
     color: '#F92F60',
     description:
       'There are failing checks that must be fixed before it can be reviewed',
