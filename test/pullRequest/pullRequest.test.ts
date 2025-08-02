@@ -150,6 +150,11 @@ describe('Probot Pull Request Handlers', () => {
             ...pullRequestPayload.pull_request,
             title: `${prefix}Test`,
           },
+          changes: {
+            title: {
+              from: 'Test',
+            },
+          },
         }),
       });
     }
@@ -178,6 +183,11 @@ describe('Probot Pull Request Handlers', () => {
         pull_request: {
           ...pullRequestPayload.pull_request,
           title: 'Test',
+        },
+        changes: {
+          title: {
+            from: '[WIP] Test',
+          },
         },
       }),
     });
