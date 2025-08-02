@@ -20,7 +20,15 @@ export default (app: Probot) => {
   app.on(['pull_request.edited'], async context => {
     const pr = new PullRequest(context);
 
-    if (pr.data.state === 'closed' || pr.data.draft) return;
+    if (
+      pr.data.state === 'closed' ||
+      pr.data.draft ||
+      // the previous title is set here if the title was updated
+      // this screens out edits to the body
+      context.payload.changes?.title?.from == null
+    ) {
+      return;
+    }
 
     if (pr.wip) {
       await pr.addLabel('wip');
