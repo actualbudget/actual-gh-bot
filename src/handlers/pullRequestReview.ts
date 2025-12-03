@@ -11,7 +11,11 @@ export default (app: Probot) => {
     if (reviewer) {
       const isMember = await pr.isOrgMember(reviewer);
       if (isMember) {
-        await pr.addAssignee(reviewer);
+        try {
+          await pr.addAssignee(reviewer);
+        } catch {
+          // Ignore errors - don't break review labeling if assignment fails
+        }
       }
     }
 
