@@ -11,3 +11,6 @@ lib
 
 # Local Netlify folder
 .netlify
+
+# Yarn
+.yarn/install-state.gz
