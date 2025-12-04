@@ -2,7 +2,9 @@ import { Context, ProbotOctokit } from 'probot';
 
 import { labels } from '../labels.js';
 
-type TContext = Context<'pull_request' | 'pull_request_review'>;
+type TContext = Context<
+  'pull_request' | 'pull_request_review' | 'pull_request_review_comment'
+>;
 type ReviewStatus =
   | 'changesRequested'
   | 'needsMoreApprovals'
@@ -194,5 +196,26 @@ export default class PullRequest {
     }
 
     return 'readyForReview';
+  }
+
+  async isOrgMember(username: string): Promise<boolean> {
+    try {
+      await this.octokit.orgs.checkMembershipForUser({
+        org: 'actualbudget',
+        username,
+      });
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  async addAssignee(username: string) {
+    await this.octokit.issues.addAssignees({
+      owner: this.owner,
+      repo: this.repo,
+      issue_number: this.number,
+      assignees: [username],
+    });
   }
 }
