@@ -47,7 +47,8 @@
     "node": ">= 18"
   },
   "resolutions": {
-    "rollup": "npm:@rollup/wasm-node"
+    "rollup": "npm:@rollup/wasm-node@*"
   },
-  "type": "module"
+  "type": "module",
+  "packageManager": "yarn@4.12.0"
 }
