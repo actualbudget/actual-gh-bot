@@ -6,9 +6,10 @@ export default (app: Probot) => {
   app.on(['pull_request_review'], async context => {
     const pr = new PullRequest(context);
 
-    // Auto-assign reviewer if they are an org member
+    // Auto-assign reviewer if they are an org member and not the PR author
     const reviewer = context.payload.review.user?.login;
-    if (reviewer) {
+    const prAuthor = pr.data.user?.login;
+    if (reviewer && reviewer !== prAuthor) {
       const isMember = await pr.isOrgMember(reviewer);
       if (isMember) {
         try {

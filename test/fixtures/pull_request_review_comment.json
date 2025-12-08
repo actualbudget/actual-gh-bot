@@ -13,6 +13,10 @@
     "number": 1,
     "state": "open",
     "draft": false,
+    "user": {
+      "login": "pr-author",
+      "id": 456
+    },
     "head": {
       "sha": "abc123"
     },

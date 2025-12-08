@@ -111,4 +111,42 @@ describe('Issue Comment Auto-Assign', () => {
 
     expect(errorMock.isDone()).toBe(false);
   });
+
+  test('does not assign commenter when they are the PR author', async () => {
+    const prAuthorPayload = {
+      ...issueCommentPayload,
+      comment: {
+        ...issueCommentPayload.comment,
+        user: {
+          login: 'pr-author',
+          id: 456,
+        },
+      },
+    };
+
+    const mock = nock('https://api.github.com')
+      .post('/app/installations/2/access_tokens')
+      .reply(200, {
+        token: 'test',
+        permissions: {
+          pull_requests: 'write',
+        },
+      })
+      .get('/repos/your-repo/your-repo-name/pulls/1')
+      .reply(200, pullRequestPayload.pull_request);
+
+    const errorMock = nock('https://api.github.com')
+      .post('/repos/your-repo/your-repo-name/issues/1/assignees')
+      .reply(() => {
+        throw new Error('Assignee should not be called when commenter is PR author');
+      });
+
+    await probot.receive({
+      name: 'issue_comment',
+      payload: prAuthorPayload,
+    });
+
+    expect(mock.pendingMocks()).toStrictEqual([]);
+    expect(errorMock.isDone()).toBe(false);
+  });
 });

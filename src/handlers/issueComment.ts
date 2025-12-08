@@ -15,6 +15,10 @@ export default (app: Probot) => {
       context.payload.issue.number,
     );
 
+    // Don't auto-assign if the commenter is the PR author
+    const prAuthor = pr.data.user?.login;
+    if (commenter === prAuthor) return;
+
     const isMember = await pr.isOrgMember(commenter);
     if (!isMember) return;
 
