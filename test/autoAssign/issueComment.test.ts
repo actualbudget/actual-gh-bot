@@ -138,7 +138,9 @@ describe('Issue Comment Auto-Assign', () => {
     const errorMock = nock('https://api.github.com')
       .post('/repos/your-repo/your-repo-name/issues/1/assignees')
       .reply(() => {
-        throw new Error('Assignee should not be called when commenter is PR author');
+        throw new Error(
+          'Assignee should not be called when commenter is PR author',
+        );
       });
 
     await probot.receive({
