@@ -77,4 +77,32 @@ describe('Pull Request Review Comment Auto-Assign', () => {
     expect(mock.pendingMocks()).toStrictEqual([]);
     expect(errorMock.isDone()).toBe(false);
   });
+
+  test('does not assign commenter when they are the PR author', async () => {
+    const prAuthorPayload = {
+      ...pullRequestReviewCommentPayload,
+      comment: {
+        ...pullRequestReviewCommentPayload.comment,
+        user: {
+          login: 'pr-author',
+          id: 456,
+        },
+      },
+    };
+
+    const errorMock = nock('https://api.github.com')
+      .post('/repos/your-repo/your-repo-name/issues/1/assignees')
+      .reply(() => {
+        throw new Error(
+          'Assignee should not be called when commenter is PR author',
+        );
+      });
+
+    await probot.receive({
+      name: 'pull_request_review_comment',
+      payload: prAuthorPayload,
+    });
+
+    expect(errorMock.isDone()).toBe(false);
+  });
 });
