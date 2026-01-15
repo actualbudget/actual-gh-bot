@@ -1,7 +1,8 @@
 import { Probot } from 'probot';
 
-import { labels } from '../labels.js';
 import PullRequest from '../classes/PullRequest.js';
+import { labels } from '../labels.js';
+import { syncPullRequestLabels } from '../labels/labelCalculator.js';
 
 export default (app: Probot) => {
   app.on(['pull_request.opened', 'pull_request.reopened'], async context => {
@@ -14,7 +15,7 @@ export default (app: Probot) => {
       await pr.setTitle(title);
     }
 
-    await pr.addLabel('wip');
+    await syncPullRequestLabels(context, pr);
   });
 
   app.on(['pull_request.edited'], async context => {
@@ -30,36 +31,23 @@ export default (app: Probot) => {
       return;
     }
 
-    if (pr.wip) {
-      await pr.addLabel('wip');
-    } else {
-      await pr.addLabel('readyForReview');
-    }
+    await syncPullRequestLabels(context, pr);
   });
 
   app.on(['pull_request.synchronize'], async context => {
     const pr = new PullRequest(context);
 
-    if (pr.wip || pr.data.draft) return;
-
-    const reviewStatus = await pr.getReviewStatus();
-
-    await pr.addLabel(reviewStatus);
+    await syncPullRequestLabels(context, pr);
   });
 
   app.on(['pull_request.closed'], async context => {
     const pr = new PullRequest(context);
-
-    if (pr.data.merged_at !== null) {
-      await pr.addLabel('merged');
-    } else {
-      await pr.clearLabels();
-    }
+    await syncPullRequestLabels(context, pr);
   });
 
   app.on(['pull_request.converted_to_draft'], async context => {
     const pr = new PullRequest(context);
-    await pr.addLabel('wip');
+    await syncPullRequestLabels(context, pr);
   });
 
   app.on(['pull_request.ready_for_review'], async context => {
@@ -68,6 +56,6 @@ export default (app: Probot) => {
     const title = pr.data.title.replace(labels.wip.regex ?? '', '');
     await pr.setTitle(title);
 
-    await pr.addLabel('readyForReview');
+    await syncPullRequestLabels(context, pr);
   });
 };
