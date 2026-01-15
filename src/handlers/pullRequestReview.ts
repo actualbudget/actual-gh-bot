@@ -1,6 +1,7 @@
 import { Probot } from 'probot';
 
 import PullRequest from '../classes/PullRequest.js';
+import { syncPullRequestLabels } from '../labels/labelCalculator.js';
 
 export default (app: Probot) => {
   app.on(['pull_request_review'], async context => {
@@ -20,10 +21,6 @@ export default (app: Probot) => {
       }
     }
 
-    if (pr.wip || pr.data.draft) return;
-
-    const reviewStatus = await pr.getReviewStatus();
-
-    await pr.addLabel(reviewStatus);
+    await syncPullRequestLabels(context, pr);
   });
 };

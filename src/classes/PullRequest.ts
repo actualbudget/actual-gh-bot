@@ -29,7 +29,6 @@ export default class PullRequest {
   repo: string;
   branch: string;
   number: number;
-  wip: boolean;
   data: TContext['payload']['pull_request'];
   octokit: ProbotOctokit;
 
@@ -42,7 +41,10 @@ export default class PullRequest {
     this.data = context.payload.pull_request;
     this.number = this.data.number;
     this.branch = this.data.base.ref;
-    this.wip = labels.wip.regex?.test(this.data.title) ?? false;
+  }
+
+  get wip() {
+    return labels.wip.regex?.test(this.data.title) ?? false;
   }
 
   static async getFromNumber(context: BarebonesContext, number: number) {
@@ -75,15 +77,24 @@ export default class PullRequest {
       pull_number: this.number,
       title,
     });
+    this.data.title = title;
   }
 
-  async addLabel<LKey extends keyof typeof labels>(name: LKey) {
+  async setLabelsByKeys(keys: Array<keyof typeof labels>) {
+    const uniqueKeys = [...new Set(keys)];
     await this.octokit.issues.setLabels({
       owner: this.owner,
       repo: this.repo,
       issue_number: this.number,
-      labels: [...this.additionalLabels, labels[name].name],
+      labels: [
+        ...this.additionalLabels,
+        ...uniqueKeys.map(key => labels[key].name),
+      ],
     });
+  }
+
+  async addLabel<LKey extends keyof typeof labels>(name: LKey) {
+    await this.setLabelsByKeys([name]);
   }
 
   async clearLabels() {
@@ -93,6 +104,31 @@ export default class PullRequest {
       issue_number: this.number,
       labels: this.additionalLabels,
     });
+  }
+
+  async hasFailingCI(ref?: string): Promise<boolean> {
+    const suites = (
+      await this.octokit.checks.listSuitesForRef({
+        owner: this.owner,
+        repo: this.repo,
+        ref: ref ?? this.data.head.sha,
+      })
+    ).data.check_suites;
+
+    const runs = [];
+    for (const suite of suites) {
+      const run = (
+        await this.octokit.checks.listForSuite({
+          owner: this.owner,
+          repo: this.repo,
+          check_suite_id: suite.id,
+        })
+      ).data.check_runs;
+
+      runs.push(...run);
+    }
+
+    return runs.some(r => r.conclusion === 'failure');
   }
 
   async getRequiredReviews() {
