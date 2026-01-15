@@ -62,6 +62,8 @@ describe('Probot Check Suite Handler', () => {
       })
       .get('/repos/your-repo/your-repo-name/pulls/1')
       .reply(200, pullRequestResponse)
+      .get('/repos/your-repo/your-repo-name/pulls/1/reviews')
+      .reply(200, [])
       .put('/repos/your-repo/your-repo-name/issues/1/labels', (body: any) => {
         expect(body).toMatchObject({ labels: [labels.failingCI.name] });
         return true;

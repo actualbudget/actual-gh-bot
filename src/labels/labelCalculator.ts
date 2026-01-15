@@ -23,12 +23,18 @@ export async function calculateRequiredLabels(
     return ['wip'];
   }
 
+  const reviewStatus = await pr.getReviewStatus();
+
   if (options.includeFailingCI) {
     const hasFailure = await pr.hasFailingCI(options.failingCiSha);
-    if (hasFailure) return ['failingCI'];
+    if (hasFailure) {
+      if (reviewStatus === 'approved') {
+        return ['approved', 'failingCI'];
+      }
+      return ['failingCI'];
+    }
   }
 
-  const reviewStatus = await pr.getReviewStatus();
   return [reviewStatus];
 }
 
