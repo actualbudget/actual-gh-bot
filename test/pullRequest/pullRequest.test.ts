@@ -13,11 +13,20 @@ const pullRequestPayload = JSON.parse(
   ),
 );
 
-const createPayload = (action: string, overrides = {}) => ({
-  ...pullRequestPayload,
-  action,
-  ...overrides,
-});
+const createPayload = (action: string, overrides: Record<string, any> = {}) => {
+  const basePayload = JSON.parse(JSON.stringify(pullRequestPayload));
+  const overridePullRequest = overrides.pull_request ?? {};
+
+  return {
+    ...basePayload,
+    action,
+    ...overrides,
+    pull_request: {
+      ...basePayload.pull_request,
+      ...overridePullRequest,
+    },
+  };
+};
 
 describe('Probot Pull Request Handlers', () => {
   let probot: any;
@@ -171,6 +180,8 @@ describe('Probot Pull Request Handlers', () => {
           pull_requests: 'write',
         },
       })
+      .get('/repos/your-repo/your-repo-name/pulls/1/reviews')
+      .reply(200, [])
       .put('/repos/your-repo/your-repo-name/issues/1/labels', (body: any) => {
         expect(body).toMatchObject({ labels: [labels.readyForReview.name] });
         return true;
@@ -263,6 +274,7 @@ describe('Probot Pull Request Handlers', () => {
       payload: createPayload('closed', {
         pull_request: {
           ...pullRequestPayload.pull_request,
+          state: 'closed',
           merged: true,
           merged_at: new Date().toISOString(),
         },
@@ -292,6 +304,7 @@ describe('Probot Pull Request Handlers', () => {
       payload: createPayload('closed', {
         pull_request: {
           ...pullRequestPayload.pull_request,
+          state: 'closed',
           merged: false,
           merged_at: null,
         },
@@ -318,7 +331,12 @@ describe('Probot Pull Request Handlers', () => {
 
     await probot.receive({
       name: 'pull_request',
-      payload: createPayload('converted_to_draft'),
+      payload: createPayload('converted_to_draft', {
+        pull_request: {
+          ...pullRequestPayload.pull_request,
+          draft: true,
+        },
+      }),
     });
 
     expect(mock.pendingMocks()).toStrictEqual([]);
@@ -338,6 +356,8 @@ describe('Probot Pull Request Handlers', () => {
         return true;
       })
       .reply(200)
+      .get('/repos/your-repo/your-repo-name/pulls/1/reviews')
+      .reply(200, [])
       .put('/repos/your-repo/your-repo-name/issues/1/labels', (body: any) => {
         expect(body).toMatchObject({ labels: [labels.readyForReview.name] });
         return true;
