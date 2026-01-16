@@ -5,6 +5,16 @@ import path from 'path';
 
 import { setupProbot, teardownProbot } from '../testHelpers';
 import { labels } from '../../src/labels.js';
+import {
+  BOT_BOUNDARY_MARKER,
+  BOT_BOUNDARY_TEXT,
+  BUNDLE_STATS_MARKER,
+  upsertSection,
+} from '../../src/utils/prBodyHelpers.js';
+import {
+  NETLIFY_SECTION_KEY,
+  buildNetlifySectionBlock,
+} from '../../src/utils/netlifySections.js';
 
 const pullRequestPayload = JSON.parse(
   fs.readFileSync(
@@ -28,6 +38,16 @@ const createPayload = (action: string, overrides: Record<string, any> = {}) => {
   };
 };
 
+const buildExpectedNetlifyBody = () => {
+  const block = buildNetlifySectionBlock();
+  return upsertSection('', block, {
+    sectionKey: NETLIFY_SECTION_KEY,
+    insertBefore: BUNDLE_STATS_MARKER,
+    boundaryMarker: BOT_BOUNDARY_MARKER,
+    boundaryText: BOT_BOUNDARY_TEXT,
+  });
+};
+
 describe('Probot Pull Request Handlers', () => {
   let probot: any;
 
@@ -40,6 +60,7 @@ describe('Probot Pull Request Handlers', () => {
   });
 
   test('adds WIP prefix and label when PR opened', async () => {
+    const expectedNetlifyBody = buildExpectedNetlifyBody();
     const mock = nock('https://api.github.com')
       .post('/app/installations/2/access_tokens')
       .reply(200, {
@@ -50,6 +71,11 @@ describe('Probot Pull Request Handlers', () => {
       })
       .patch('/repos/your-repo/your-repo-name/pulls/1', (body: any) => {
         expect(body).toMatchObject({ title: '[WIP] Test Pull Request' });
+        return true;
+      })
+      .reply(200)
+      .patch('/repos/your-repo/your-repo-name/pulls/1', (body: any) => {
+        expect(body).toMatchObject({ body: expectedNetlifyBody });
         return true;
       })
       .reply(200)
@@ -68,6 +94,7 @@ describe('Probot Pull Request Handlers', () => {
   });
 
   test('do not add WIP prefix if already present', async () => {
+    const expectedNetlifyBody = buildExpectedNetlifyBody();
     const mock = nock('https://api.github.com')
       .post('/app/installations/2/access_tokens')
       .reply(200, {
@@ -76,19 +103,16 @@ describe('Probot Pull Request Handlers', () => {
           pull_requests: 'write',
         },
       })
+      .patch('/repos/your-repo/your-repo-name/pulls/1', (body: any) => {
+        expect(body).toMatchObject({ body: expectedNetlifyBody });
+        return true;
+      })
+      .reply(200)
       .put('/repos/your-repo/your-repo-name/issues/1/labels', (body: any) => {
         expect(body).toMatchObject({ labels: [labels.wip.name] });
         return true;
       })
       .reply(200);
-
-    const errorMock = nock('https://api.github.com')
-      .patch('/repos/your-repo/your-repo-name/pulls/1')
-      .reply(() => {
-        throw new Error(
-          'Title update should not be called for new pull requests already containing WIP prefix',
-        );
-      });
 
     await probot.receive({
       name: 'pull_request',
@@ -101,10 +125,10 @@ describe('Probot Pull Request Handlers', () => {
     });
 
     expect(mock.pendingMocks()).toStrictEqual([]);
-    expect(errorMock.isDone()).toBe(false);
   });
 
   test('adds WIP prefix and label when PR reopened', async () => {
+    const expectedNetlifyBody = buildExpectedNetlifyBody();
     const mock = nock('https://api.github.com')
       .post('/app/installations/2/access_tokens')
       .reply(200, {
@@ -115,6 +139,11 @@ describe('Probot Pull Request Handlers', () => {
       })
       .patch('/repos/your-repo/your-repo-name/pulls/1', (body: any) => {
         expect(body).toMatchObject({ title: '[WIP] Test Pull Request' });
+        return true;
+      })
+      .reply(200)
+      .patch('/repos/your-repo/your-repo-name/pulls/1', (body: any) => {
+        expect(body).toMatchObject({ body: expectedNetlifyBody });
         return true;
       })
       .reply(200)
@@ -343,6 +372,7 @@ describe('Probot Pull Request Handlers', () => {
   });
 
   test('removes WIP prefix and adds RFR label for when draft converted', async () => {
+    const expectedNetlifyBody = buildExpectedNetlifyBody();
     const mock = nock('https://api.github.com')
       .post('/app/installations/2/access_tokens')
       .reply(200, {
@@ -353,6 +383,11 @@ describe('Probot Pull Request Handlers', () => {
       })
       .patch('/repos/your-repo/your-repo-name/pulls/1', (body: any) => {
         expect(body).toMatchObject({ title: 'Test Pull Request' });
+        return true;
+      })
+      .reply(200)
+      .patch('/repos/your-repo/your-repo-name/pulls/1', (body: any) => {
+        expect(body).toMatchObject({ body: expectedNetlifyBody });
         return true;
       })
       .reply(200)
