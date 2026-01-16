@@ -80,6 +80,16 @@ export default class PullRequest {
     this.data.title = title;
   }
 
+  async setBody(body: string) {
+    await this.octokit.pulls.update({
+      owner: this.owner,
+      repo: this.repo,
+      pull_number: this.number,
+      body,
+    });
+    this.data.body = body;
+  }
+
   async setLabelsByKeys(keys: Array<keyof typeof labels>) {
     const uniqueKeys = [...new Set(keys)];
     await this.octokit.issues.setLabels({

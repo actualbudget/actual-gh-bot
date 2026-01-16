@@ -3,6 +3,8 @@ import { Probot } from 'probot';
 import PullRequest from '../classes/PullRequest.js';
 import { labels } from '../labels.js';
 import { syncPullRequestLabels } from '../labels/labelCalculator.js';
+import { BUNDLE_STATS_MARKER } from '../utils/prBodyHelpers.js';
+import { ensureNetlifySection } from '../utils/netlifySections.js';
 
 export default (app: Probot) => {
   app.on(['pull_request.opened', 'pull_request.reopened'], async context => {
@@ -15,6 +17,7 @@ export default (app: Probot) => {
       await pr.setTitle(title);
     }
 
+    await ensureNetlifySection(pr, { insertBefore: BUNDLE_STATS_MARKER });
     await syncPullRequestLabels(context, pr);
   });
 
@@ -56,6 +59,7 @@ export default (app: Probot) => {
     const title = pr.data.title.replace(labels.wip.regex ?? '', '');
     await pr.setTitle(title);
 
+    await ensureNetlifySection(pr, { insertBefore: BUNDLE_STATS_MARKER });
     await syncPullRequestLabels(context, pr);
   });
 };
