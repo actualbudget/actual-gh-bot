@@ -104,6 +104,46 @@ describe('Probot Pull Request Handlers', () => {
     expect(errorMock.isDone()).toBe(false);
   });
 
+  test('does not add WIP prefix or label for dependabot PRs', async () => {
+    const mock = nock('https://api.github.com')
+      .post('/app/installations/2/access_tokens')
+      .reply(200, {
+        token: 'test',
+        permissions: {
+          pull_requests: 'write',
+        },
+      })
+      .get('/repos/your-repo/your-repo-name/pulls/1/reviews')
+      .reply(200, [])
+      .put('/repos/your-repo/your-repo-name/issues/1/labels', (body: any) => {
+        expect(body).toMatchObject({ labels: [labels.readyForReview.name] });
+        return true;
+      })
+      .reply(200);
+
+    const errorMock = nock('https://api.github.com')
+      .patch('/repos/your-repo/your-repo-name/pulls/1')
+      .reply(() => {
+        throw new Error('Title update should not be called for dependabot PRs');
+      });
+
+    await probot.receive({
+      name: 'pull_request',
+      payload: createPayload('opened', {
+        pull_request: {
+          title: 'Bump shell-quote from 1.8.3 to 1.8.4',
+          user: {
+            login: 'dependabot[bot]',
+            id: 49699333,
+          },
+        },
+      }),
+    });
+
+    expect(mock.pendingMocks()).toStrictEqual([]);
+    expect(errorMock.isDone()).toBe(false);
+  });
+
   test('adds WIP prefix and label when PR reopened', async () => {
     const mock = nock('https://api.github.com')
       .post('/app/installations/2/access_tokens')
