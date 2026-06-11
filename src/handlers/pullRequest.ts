@@ -10,7 +10,7 @@ export default (app: Probot) => {
 
     let title = pr.data.title;
 
-    if (!pr.wip && !pr.data.draft) {
+    if (!pr.wip && !pr.data.draft && !pr.isDependabot) {
       title = `[WIP] ${title}`;
       await pr.setTitle(title);
     }

@@ -47,6 +47,10 @@ export default class PullRequest {
     return labels.wip.regex?.test(this.data.title) ?? false;
   }
 
+  get isDependabot() {
+    return this.data.user?.login === 'dependabot[bot]';
+  }
+
   static async getFromNumber(context: BarebonesContext, number: number) {
     const { data } = await context.octokit.pulls.get({
       owner: context.payload.repository.owner.login,
