@@ -28,6 +28,81 @@ const createPayload = (action: string, overrides: Record<string, any> = {}) => {
   };
 };
 
+type MockReview = {
+  commit_id: string;
+  state: 'APPROVED' | 'CHANGES_REQUESTED';
+  submitted_at: string;
+  user: {
+    id: number;
+    login: string;
+  };
+};
+
+const createReview = (
+  user: MockReview['user'],
+  state: MockReview['state'],
+  submittedAt = '2026-01-13T18:18:19Z',
+): MockReview => ({
+  commit_id: 'abc123',
+  state,
+  submitted_at: submittedAt,
+  user,
+});
+
+const mockReviewLabelUpdate = ({
+  reviews,
+  expectedLabel,
+  requiredReviewCount,
+}: {
+  reviews: MockReview[];
+  expectedLabel: string;
+  requiredReviewCount?: number;
+}) => {
+  const mock = nock('https://api.github.com')
+    .post('/app/installations/2/access_tokens')
+    .reply(200, {
+      token: 'test',
+      permissions: {
+        pull_requests: 'write',
+      },
+    })
+    .get('/repos/your-repo/your-repo-name/pulls/1/reviews')
+    .reply(200, reviews);
+
+  const reviewers = new Map(
+    reviews.map(review => [review.user.id, review.user]),
+  );
+  for (const reviewer of reviewers.values()) {
+    mock
+      .get(
+        `/repos/your-repo/your-repo-name/collaborators/${reviewer.login}/permission`,
+      )
+      .reply(200, {
+        permission: 'write',
+        user: reviewer,
+      });
+  }
+
+  if (requiredReviewCount !== undefined) {
+    mock
+      .get('/repos/your-repo/your-repo-name/branches/master/protection')
+      .reply(200, {
+        required_pull_request_reviews: {
+          required_approving_review_count: requiredReviewCount,
+        },
+      });
+  }
+
+  mock
+    .put('/repos/your-repo/your-repo-name/issues/1/labels', (body: any) => {
+      expect(body).toMatchObject({ labels: [expectedLabel] });
+      return true;
+    })
+    .reply(200);
+
+  return mock;
+};
+
 describe('Probot Pull Request Handlers', () => {
   let probot: any;
 
@@ -289,6 +364,116 @@ describe('Probot Pull Request Handlers', () => {
     await probot.receive({
       name: 'pull_request',
       payload: createPayload('synchronize'),
+    });
+
+    expect(mock.pendingMocks()).toStrictEqual([]);
+  });
+
+  test('does not count the Copilot task initiator approval', async () => {
+    const taskInitiator = {
+      id: 886567,
+      login: 'task-initiator',
+    };
+    const mock = mockReviewLabelUpdate({
+      reviews: [createReview(taskInitiator, 'APPROVED')],
+      expectedLabel: labels.needsMoreApprovals.name,
+      requiredReviewCount: 1,
+    });
+
+    await probot.receive({
+      name: 'pull_request',
+      payload: createPayload('synchronize', {
+        pull_request: {
+          user: {
+            id: 198982749,
+            login: 'Copilot',
+          },
+          assignee: taskInitiator,
+        },
+      }),
+    });
+
+    expect(mock.pendingMocks()).toStrictEqual([]);
+  });
+
+  test('counts another maintainer approval on Copilot pull requests', async () => {
+    const taskInitiator = {
+      id: 886567,
+      login: 'task-initiator',
+    };
+    const maintainer = {
+      id: 81489167,
+      login: 'maintainer',
+    };
+    const mock = mockReviewLabelUpdate({
+      reviews: [
+        createReview(taskInitiator, 'APPROVED'),
+        createReview(maintainer, 'APPROVED'),
+      ],
+      expectedLabel: labels.approved.name,
+      requiredReviewCount: 1,
+    });
+
+    await probot.receive({
+      name: 'pull_request',
+      payload: createPayload('synchronize', {
+        pull_request: {
+          user: {
+            id: 198982749,
+            login: 'Copilot',
+          },
+          assignee: taskInitiator,
+        },
+      }),
+    });
+
+    expect(mock.pendingMocks()).toStrictEqual([]);
+  });
+
+  test('keeps change requests from the Copilot task initiator', async () => {
+    const taskInitiator = {
+      id: 886567,
+      login: 'task-initiator',
+    };
+    const mock = mockReviewLabelUpdate({
+      reviews: [createReview(taskInitiator, 'CHANGES_REQUESTED')],
+      expectedLabel: labels.changesRequested.name,
+    });
+
+    await probot.receive({
+      name: 'pull_request',
+      payload: createPayload('synchronize', {
+        pull_request: {
+          user: {
+            id: 198982749,
+            login: 'Copilot',
+          },
+          assignee: taskInitiator,
+        },
+      }),
+    });
+
+    expect(mock.pendingMocks()).toStrictEqual([]);
+  });
+
+  test('counts primary assignee approvals on regular pull requests', async () => {
+    const reviewer = {
+      id: 81489167,
+      login: 'maintainer',
+    };
+    const mock = mockReviewLabelUpdate({
+      reviews: [createReview(reviewer, 'APPROVED')],
+      expectedLabel: labels.approved.name,
+      requiredReviewCount: 1,
+    });
+
+    await probot.receive({
+      name: 'pull_request',
+      payload: createPayload('synchronize', {
+        pull_request: {
+          assignee: reviewer,
+        },
+      }),
     });
 
     expect(mock.pendingMocks()).toStrictEqual([]);
