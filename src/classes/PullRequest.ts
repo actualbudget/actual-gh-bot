@@ -51,6 +51,13 @@ export default class PullRequest {
     return this.data.user?.login === 'dependabot[bot]';
   }
 
+  get isCopilotAuthored() {
+    return (
+      this.data.user?.login?.toLowerCase() === 'copilot' ||
+      this.data.user?.id === 198982749
+    );
+  }
+
   static async getFromNumber(context: BarebonesContext, number: number) {
     const { data } = await context.octokit.pulls.get({
       owner: context.payload.repository.owner.login,
@@ -212,8 +219,21 @@ export default class PullRequest {
       .filter(({ data }) => ['write', 'admin'].includes(data.permission))
       .map(d => d.data?.user?.id);
 
-    const latestReviews = Object.values(latestReviewsObj).filter(({ userId }) =>
-      pushReviewers.includes(userId),
+    const prAuthorId = this.data.user?.id;
+    // For Copilot-authored PRs, the task initiator (the human who started the
+    // Copilot session) is the de-facto author: their approval is a
+    // self-approval and must not count either.
+    const taskInitiatorId = this.isCopilotAuthored
+      ? (this.data.assignee?.id ?? this.data.assignees?.[0]?.id)
+      : undefined;
+
+    const latestReviews = Object.values(latestReviewsObj).filter(
+      ({ userId }) =>
+        // A self-approval must not earn the 'approved' label, since only an
+        // independent approval can actually unblock merging.
+        pushReviewers.includes(userId) &&
+        userId !== prAuthorId &&
+        userId !== taskInitiatorId,
     );
 
     if (!latestReviews.length) return 'readyForReview';
