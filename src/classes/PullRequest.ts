@@ -2,6 +2,8 @@ import { Context, ProbotOctokit } from 'probot';
 
 import { labels } from '../labels.js';
 
+const COPILOT_USER_ID = 198982749;
+
 type TContext = Context<
   'pull_request' | 'pull_request_review' | 'pull_request_review_comment'
 >;
@@ -222,8 +224,12 @@ export default class PullRequest {
       return 'changesRequested';
     }
 
+    const copilotTaskInitiatorId =
+      this.data.user?.id === COPILOT_USER_ID
+        ? this.data.assignee?.id
+        : undefined;
     const approvingReviews = latestReviews.filter(
-      r => r.state === 'APPROVED',
+      r => r.state === 'APPROVED' && r.userId !== copilotTaskInitiatorId,
     ).length;
     const requiredReviews = await this.getRequiredReviews();
 
