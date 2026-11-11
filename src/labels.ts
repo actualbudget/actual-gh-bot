@@ -2,12 +2,10 @@ type Label = {
   name: string;
   color: string;
   description: string;
-  regex?: RegExp;
 };
 
 export const labels: Record<string, Label> = {
   wip: {
-    regex: /^\s*(\[WIP\]\s*|WIP:\s*|WIP\s+)+/i,
     name: ':construction: WIP',
     color: '#FBCA04',
     description: 'Still under development, not yet ready for review',
