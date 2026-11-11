@@ -114,7 +114,7 @@ describe('Probot Pull Request Handlers', () => {
     teardownProbot();
   });
 
-  test('adds WIP prefix and label when PR opened', async () => {
+  test('labels a new PR as ready for review without changing its title', async () => {
     const mock = nock('https://api.github.com')
       .post('/app/installations/2/access_tokens')
       .reply(200, {
@@ -123,16 +123,19 @@ describe('Probot Pull Request Handlers', () => {
           pull_requests: 'write',
         },
       })
-      .patch('/repos/your-repo/your-repo-name/pulls/1', (body: any) => {
-        expect(body).toMatchObject({ title: '[WIP] Test Pull Request' });
-        return true;
-      })
-      .reply(200)
+      .get('/repos/your-repo/your-repo-name/pulls/1/reviews')
+      .reply(200, [])
       .put('/repos/your-repo/your-repo-name/issues/1/labels', (body: any) => {
-        expect(body).toMatchObject({ labels: [labels.wip.name] });
+        expect(body).toMatchObject({ labels: [labels.readyForReview.name] });
         return true;
       })
       .reply(200);
+
+    const errorMock = nock('https://api.github.com')
+      .patch('/repos/your-repo/your-repo-name/pulls/1')
+      .reply(() => {
+        throw new Error('The pull request title should never be changed');
+      });
 
     await probot.receive({
       name: 'pull_request',
@@ -140,9 +143,10 @@ describe('Probot Pull Request Handlers', () => {
     });
 
     expect(mock.pendingMocks()).toStrictEqual([]);
+    expect(errorMock.isDone()).toBe(false);
   });
 
-  test('do not add WIP prefix if already present', async () => {
+  test('labels a new draft PR as WIP', async () => {
     const mock = nock('https://api.github.com')
       .post('/app/installations/2/access_tokens')
       .reply(200, {
@@ -160,9 +164,7 @@ describe('Probot Pull Request Handlers', () => {
     const errorMock = nock('https://api.github.com')
       .patch('/repos/your-repo/your-repo-name/pulls/1')
       .reply(() => {
-        throw new Error(
-          'Title update should not be called for new pull requests already containing WIP prefix',
-        );
+        throw new Error('The pull request title should never be changed');
       });
 
     await probot.receive({
@@ -170,7 +172,7 @@ describe('Probot Pull Request Handlers', () => {
       payload: createPayload('opened', {
         pull_request: {
           ...pullRequestPayload.pull_request,
-          title: `[WIP] ${pullRequestPayload.pull_request.title}`,
+          draft: true,
         },
       }),
     });
@@ -179,7 +181,7 @@ describe('Probot Pull Request Handlers', () => {
     expect(errorMock.isDone()).toBe(false);
   });
 
-  test('does not add WIP prefix or label for dependabot PRs', async () => {
+  test('does not label dependabot PRs as WIP', async () => {
     const mock = nock('https://api.github.com')
       .post('/app/installations/2/access_tokens')
       .reply(200, {
@@ -219,74 +221,7 @@ describe('Probot Pull Request Handlers', () => {
     expect(errorMock.isDone()).toBe(false);
   });
 
-  test('adds WIP prefix and label when PR reopened', async () => {
-    const mock = nock('https://api.github.com')
-      .post('/app/installations/2/access_tokens')
-      .reply(200, {
-        token: 'test',
-        permissions: {
-          pull_requests: 'write',
-        },
-      })
-      .patch('/repos/your-repo/your-repo-name/pulls/1', (body: any) => {
-        expect(body).toMatchObject({ title: '[WIP] Test Pull Request' });
-        return true;
-      })
-      .reply(200)
-      .put('/repos/your-repo/your-repo-name/issues/1/labels', (body: any) => {
-        expect(body).toMatchObject({ labels: [labels.wip.name] });
-        return true;
-      })
-      .reply(200);
-
-    await probot.receive({
-      name: 'pull_request',
-      payload: createPayload('reopened'),
-    });
-
-    expect(mock.pendingMocks()).toStrictEqual([]);
-  });
-
-  test('adds WIP label when title edited to include prefix', async () => {
-    const mock = nock('https://api.github.com')
-      .post('/app/installations/2/access_tokens')
-      .reply(200, {
-        token: 'test',
-        permissions: {
-          pull_requests: 'write',
-        },
-      });
-
-    const prefixes = ['[WIP] ', '[WIP]', 'WIP: ', 'WIP:', 'WIP '];
-
-    for (const prefix of prefixes) {
-      mock
-        .put('/repos/your-repo/your-repo-name/issues/1/labels', (body: any) => {
-          expect(body).toMatchObject({ labels: [labels.wip.name] });
-          return true;
-        })
-        .reply(200);
-
-      await probot.receive({
-        name: 'pull_request',
-        payload: createPayload('edited', {
-          pull_request: {
-            ...pullRequestPayload.pull_request,
-            title: `${prefix}Test`,
-          },
-          changes: {
-            title: {
-              from: 'Test',
-            },
-          },
-        }),
-      });
-    }
-
-    expect(mock.pendingMocks()).toStrictEqual([]);
-  });
-
-  test('adds RFR label when title edited to remove prefix', async () => {
+  test('labels a reopened PR as ready for review', async () => {
     const mock = nock('https://api.github.com')
       .post('/app/installations/2/access_tokens')
       .reply(200, {
@@ -303,44 +238,18 @@ describe('Probot Pull Request Handlers', () => {
       })
       .reply(200);
 
-    await probot.receive({
-      name: 'pull_request',
-      payload: createPayload('edited', {
-        pull_request: {
-          ...pullRequestPayload.pull_request,
-          title: 'Test',
-        },
-        changes: {
-          title: {
-            from: '[WIP] Test',
-          },
-        },
-      }),
-    });
-
-    expect(mock.pendingMocks()).toStrictEqual([]);
-  });
-
-  test('ignore title edit when draft', async () => {
     const errorMock = nock('https://api.github.com')
-      .put('/repos/your-repo/your-repo-name/issues/1/labels')
+      .patch('/repos/your-repo/your-repo-name/pulls/1')
       .reply(() => {
-        throw new Error(
-          'Label update should not be called for draft pull requests',
-        );
+        throw new Error('The pull request title should never be changed');
       });
 
     await probot.receive({
       name: 'pull_request',
-      payload: createPayload('edited', {
-        pull_request: {
-          ...pullRequestPayload.pull_request,
-          draft: true,
-        },
-      }),
+      payload: createPayload('reopened'),
     });
 
-    // Ensure that no label update request was made
+    expect(mock.pendingMocks()).toStrictEqual([]);
     expect(errorMock.isDone()).toBe(false);
   });
 
@@ -567,7 +476,7 @@ describe('Probot Pull Request Handlers', () => {
     expect(mock.pendingMocks()).toStrictEqual([]);
   });
 
-  test('removes WIP prefix and adds RFR label for when draft converted', async () => {
+  test('adds RFR label when a draft is marked ready for review', async () => {
     const mock = nock('https://api.github.com')
       .post('/app/installations/2/access_tokens')
       .reply(200, {
@@ -576,11 +485,6 @@ describe('Probot Pull Request Handlers', () => {
           pull_requests: 'write',
         },
       })
-      .patch('/repos/your-repo/your-repo-name/pulls/1', (body: any) => {
-        expect(body).toMatchObject({ title: 'Test Pull Request' });
-        return true;
-      })
-      .reply(200)
       .get('/repos/your-repo/your-repo-name/pulls/1/reviews')
       .reply(200, [])
       .put('/repos/your-repo/your-repo-name/issues/1/labels', (body: any) => {
@@ -589,16 +493,18 @@ describe('Probot Pull Request Handlers', () => {
       })
       .reply(200);
 
+    const errorMock = nock('https://api.github.com')
+      .patch('/repos/your-repo/your-repo-name/pulls/1')
+      .reply(() => {
+        throw new Error('The pull request title should never be changed');
+      });
+
     await probot.receive({
       name: 'pull_request',
-      payload: createPayload('ready_for_review', {
-        pull_request: {
-          ...pullRequestPayload.pull_request,
-          title: '[WIP] Test Pull Request',
-        },
-      }),
+      payload: createPayload('ready_for_review'),
     });
 
     expect(mock.pendingMocks()).toStrictEqual([]);
+    expect(errorMock.isDone()).toBe(false);
   });
 });
