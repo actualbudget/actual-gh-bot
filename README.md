@@ -4,6 +4,8 @@
 
 The Actual GitHub Bot is designed to help manage contributions to the Actual project repositories.
 
+Node.js 22.12+, 24, or 26+ is required.
+
 ## Features
 - Automated pull request labelling based on status
 
