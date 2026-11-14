@@ -1,4 +1,4 @@
-import { Context, ProbotOctokit } from 'probot';
+import type { Context, ProbotOctokit } from 'probot';
 
 import { labels } from '../labels.js';
 
@@ -45,10 +45,6 @@ export default class PullRequest {
     this.branch = this.data.base.ref;
   }
 
-  get wip() {
-    return labels.wip.regex?.test(this.data.title) ?? false;
-  }
-
   get isDependabot() {
     return this.data.user?.login === 'dependabot[bot]';
   }
@@ -74,16 +70,6 @@ export default class PullRequest {
     return this.data.labels
       .map(l => l.name)
       .filter(name => !labelNames.includes(name));
-  }
-
-  async setTitle(title: string) {
-    await this.octokit.pulls.update({
-      owner: this.owner,
-      repo: this.repo,
-      pull_number: this.number,
-      title,
-    });
-    this.data.title = title;
   }
 
   async setLabelsByKeys(keys: Array<keyof typeof labels>) {
