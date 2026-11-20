@@ -73,7 +73,8 @@ export default class PullRequest {
   // check_suite payloads carry no PR for PRs opened from forks, and the
   // commit -> PR lookup is empty for them too, so match on the head SHA.
   // ponytail: lists every open PR per event; switch to search if that gets slow
-  static async getFromHeadSha(context: BarebonesContext, sha: string) {
+  // Several open PRs can share a head commit, so this returns all of them.
+  static async getAllFromHeadSha(context: BarebonesContext, sha: string) {
     const openPulls = await context.octokit.paginate(
       context.octokit.pulls.list,
       {
@@ -83,16 +84,18 @@ export default class PullRequest {
         per_page: 100,
       },
     );
-    const data = openPulls.find(p => p.head.sha === sha);
-    if (!data) return null;
-
-    return new PullRequest({
-      ...context,
-      payload: {
-        ...context.payload,
-        pull_request: data,
-      },
-    });
+    return openPulls
+      .filter(p => p.head.sha === sha)
+      .map(
+        data =>
+          new PullRequest({
+            ...context,
+            payload: {
+              ...context.payload,
+              pull_request: data,
+            },
+          }),
+      );
   }
 
   get additionalLabels() {
@@ -180,19 +183,28 @@ export default class PullRequest {
   }
 
   async getReviewStatus(): Promise<ReviewStatus> {
-    const allReviews = (
-      await this.octokit.pulls.listReviews({
+    // Reviews come oldest first, so every page is needed to see the latest.
+    const everyReview = await this.octokit.paginate(
+      this.octokit.pulls.listReviews,
+      {
         owner: this.owner,
         repo: this.repo,
         pull_number: this.number,
-      })
-    ).data.filter(r => ['APPROVED', 'CHANGES_REQUESTED'].includes(r.state));
+      },
+    );
+    const allReviews = everyReview.filter(r =>
+      ['APPROVED', 'CHANGES_REQUESTED'].includes(r.state),
+    );
 
     // CodeRabbit has no write access, so it never counts as a reviewer below.
     // Its latest verdict stands across pushes (it approves once its comments
     // are resolved), and only blocks while no maintainer has reviewed.
-    const codeRabbitVerdict = allReviews
-      .filter(r => r.user?.login === CODERABBIT_LOGIN)
+    // Dismissed verdicts are kept in the running so that dismissing the latest
+    // one clears it rather than reviving an older one.
+    const codeRabbitVerdict = everyReview
+      .filter(
+        r => r.user?.login === CODERABBIT_LOGIN && r.state !== 'COMMENTED',
+      )
       .at(-1)?.state;
     const unreviewed: ReviewStatus =
       codeRabbitVerdict === 'CHANGES_REQUESTED'
@@ -280,6 +292,8 @@ export default class PullRequest {
       return 'approved';
     }
 
+    // Only reached when the sole approval is the excluded Copilot task
+    // initiator's, which leaves the PR effectively unreviewed.
     return unreviewed;
   }
 

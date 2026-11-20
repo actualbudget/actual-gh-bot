@@ -456,33 +456,99 @@ describe('Probot Pull Request Handlers', () => {
     expect(mock.pendingMocks()).toStrictEqual([]);
   });
 
-  test('labels changes requested when CodeRabbit requested changes', async () => {
-    const mock = nock('https://api.github.com')
-      .post('/app/installations/2/access_tokens')
-      .reply(200, { token: 'test', permissions: { pull_requests: 'write' } })
-      .get('/repos/your-repo/your-repo-name/pulls/1/reviews')
-      .reply(200, [
-        {
-          // an older commit: CodeRabbit's verdict stands until it re-reviews
-          ...createReview(
-            { id: 136622811, login: 'coderabbitai[bot]' },
-            'CHANGES_REQUESTED',
-          ),
-          commit_id: 'older000',
-        },
-      ])
-      .put('/repos/your-repo/your-repo-name/issues/1/labels', (body: any) => {
-        expect(body).toMatchObject({ labels: [labels.changesRequested.name] });
-        return true;
-      })
-      .reply(200);
-
-    await probot.receive({
-      name: 'pull_request',
-      payload: createPayload('synchronize'),
+  describe('CodeRabbit reviews', () => {
+    const codeRabbit = { id: 136622811, login: 'coderabbitai[bot]' };
+    const maintainer = { id: 81489167, login: 'maintainer' };
+    const reviewsPath = '/repos/your-repo/your-repo-name/pulls/1/reviews';
+    // on an older commit: CodeRabbit's verdict stands until it re-reviews
+    const codeRabbitReview = (state: string) => ({
+      ...createReview(codeRabbit, 'APPROVED'),
+      state,
+      commit_id: 'older000',
     });
 
-    expect(mock.pendingMocks()).toStrictEqual([]);
+    const mockToken = () =>
+      nock('https://api.github.com')
+        .post('/app/installations/2/access_tokens')
+        .reply(200, { token: 'test', permissions: { pull_requests: 'write' } });
+
+    const expectLabel = (mock: nock.Scope, expectedLabel: string) =>
+      mock
+        .put('/repos/your-repo/your-repo-name/issues/1/labels', (body: any) => {
+          expect(body).toMatchObject({ labels: [expectedLabel] });
+          return true;
+        })
+        .reply(200);
+
+    const receiveSynchronize = () =>
+      probot.receive({
+        name: 'pull_request',
+        payload: createPayload('synchronize'),
+      });
+
+    test('labels changes requested when CodeRabbit requested changes', async () => {
+      const mock = mockToken()
+        .get(reviewsPath)
+        .reply(200, [codeRabbitReview('CHANGES_REQUESTED')]);
+      expectLabel(mock, labels.changesRequested.name);
+
+      await receiveSynchronize();
+
+      expect(mock.pendingMocks()).toStrictEqual([]);
+    });
+
+    test('does not fall back to an older verdict when the latest one is dismissed', async () => {
+      const mock = mockToken()
+        .get(reviewsPath)
+        .reply(200, [
+          codeRabbitReview('CHANGES_REQUESTED'),
+          codeRabbitReview('DISMISSED'),
+          codeRabbitReview('COMMENTED'),
+        ]);
+      expectLabel(mock, labels.readyForReview.name);
+
+      await receiveSynchronize();
+
+      expect(mock.pendingMocks()).toStrictEqual([]);
+    });
+
+    test('reads every page of reviews', async () => {
+      const mock = mockToken()
+        .get(reviewsPath)
+        .reply(200, [codeRabbitReview('CHANGES_REQUESTED')], {
+          Link: `<https://api.github.com${reviewsPath}?page=2>; rel="next"`,
+        })
+        .get(reviewsPath)
+        .query({ page: 2 })
+        .reply(200, [codeRabbitReview('APPROVED')]);
+      expectLabel(mock, labels.readyForReview.name);
+
+      await receiveSynchronize();
+
+      expect(mock.pendingMocks()).toStrictEqual([]);
+    });
+
+    test('lets a maintainer review take precedence', async () => {
+      const mock = mockToken()
+        .get(reviewsPath)
+        .reply(200, [
+          codeRabbitReview('CHANGES_REQUESTED'),
+          createReview(maintainer, 'APPROVED'),
+        ])
+        .get(
+          '/repos/your-repo/your-repo-name/collaborators/maintainer/permission',
+        )
+        .reply(200, { permission: 'write', user: maintainer })
+        .get('/repos/your-repo/your-repo-name/branches/master/protection')
+        .reply(200, {
+          required_pull_request_reviews: { required_approving_review_count: 1 },
+        });
+      expectLabel(mock, labels.approved.name);
+
+      await receiveSynchronize();
+
+      expect(mock.pendingMocks()).toStrictEqual([]);
+    });
   });
 
   test('counts primary assignee approvals on regular pull requests', async () => {

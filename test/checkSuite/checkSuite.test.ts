@@ -113,6 +113,41 @@ describe('Probot Check Suite Handler', () => {
     expect(mock.pendingMocks()).toStrictEqual([]);
   });
 
+  test('labels every open PR that has the commit as its head', async () => {
+    probot = setupProbot({
+      checkSuites: [{ id: 101 }],
+      checkRunsBySuite: { 101: [{ conclusion: 'failure' }] },
+    });
+
+    const mock = nock('https://api.github.com')
+      .post('/app/installations/2/access_tokens')
+      .reply(200, { token: 'test', permissions: { pull_requests: 'write' } })
+      .get('/repos/your-repo/your-repo-name/pulls')
+      .query({ state: 'open', per_page: 100 })
+      .reply(200, [pullRequestResponse, { ...pullRequestResponse, number: 2 }]);
+
+    for (const number of [1, 2]) {
+      mock
+        .get(`/repos/your-repo/your-repo-name/pulls/${number}/reviews`)
+        .reply(200, [])
+        .put(
+          `/repos/your-repo/your-repo-name/issues/${number}/labels`,
+          (body: any) => {
+            expect(body).toMatchObject({ labels: [labels.failingCI.name] });
+            return true;
+          },
+        )
+        .reply(200);
+    }
+
+    await probot.receive({
+      name: 'check_suite',
+      payload: checkSuitePayload,
+    });
+
+    expect(mock.pendingMocks()).toStrictEqual([]);
+  });
+
   test('ignores check suites for commits that are not a PR head', async () => {
     probot = setupProbot();
 
