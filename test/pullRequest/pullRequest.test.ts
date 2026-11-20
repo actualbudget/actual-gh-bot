@@ -456,6 +456,35 @@ describe('Probot Pull Request Handlers', () => {
     expect(mock.pendingMocks()).toStrictEqual([]);
   });
 
+  test('labels changes requested when CodeRabbit requested changes', async () => {
+    const mock = nock('https://api.github.com')
+      .post('/app/installations/2/access_tokens')
+      .reply(200, { token: 'test', permissions: { pull_requests: 'write' } })
+      .get('/repos/your-repo/your-repo-name/pulls/1/reviews')
+      .reply(200, [
+        {
+          // an older commit: CodeRabbit's verdict stands until it re-reviews
+          ...createReview(
+            { id: 136622811, login: 'coderabbitai[bot]' },
+            'CHANGES_REQUESTED',
+          ),
+          commit_id: 'older000',
+        },
+      ])
+      .put('/repos/your-repo/your-repo-name/issues/1/labels', (body: any) => {
+        expect(body).toMatchObject({ labels: [labels.changesRequested.name] });
+        return true;
+      })
+      .reply(200);
+
+    await probot.receive({
+      name: 'pull_request',
+      payload: createPayload('synchronize'),
+    });
+
+    expect(mock.pendingMocks()).toStrictEqual([]);
+  });
+
   test('counts primary assignee approvals on regular pull requests', async () => {
     const reviewer = {
       id: 81489167,

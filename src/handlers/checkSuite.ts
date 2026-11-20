@@ -5,10 +5,14 @@ import { syncPullRequestLabels } from '../labels/labelCalculator.js';
 
 export default (app: Probot) => {
   app.on(['check_suite.completed'], async context => {
-    const commitSha = context.payload.check_suite.head_sha;
-    const prNum = context.payload.check_suite.pull_requests[0].number;
+    const pr = await PullRequest.getFromHeadSha(
+      context,
+      context.payload.check_suite.head_sha,
+    );
+    // No open PR has this commit as its head (push to a branch, or a newer
+    // commit has been pushed since): nothing to label.
+    if (!pr) return;
 
-    const pr = await PullRequest.getFromNumber(context, prNum);
-    await syncPullRequestLabels(context, pr, { failingCiSha: commitSha });
+    await syncPullRequestLabels(context, pr);
   });
 };
