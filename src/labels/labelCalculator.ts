@@ -6,13 +6,9 @@ import { labels } from '../labels.js';
 
 export type LabelKey = keyof typeof labels;
 
-type LabelCalcOptions = {
-  failingCiSha?: string;
-};
-
 export async function calculateRequiredLabels(
   pr: PullRequest,
-  options: { includeFailingCI: boolean; failingCiSha?: string },
+  options: { includeFailingCI: boolean },
 ): Promise<LabelKey[]> {
   if (pr.data.state === 'closed') {
     if (pr.data.merged_at != null) return ['merged'];
@@ -26,7 +22,7 @@ export async function calculateRequiredLabels(
   const reviewStatus = await pr.getReviewStatus();
 
   if (options.includeFailingCI) {
-    const hasFailure = await pr.hasFailingCI(options.failingCiSha);
+    const hasFailure = await pr.hasFailingCI();
     if (hasFailure) {
       if (reviewStatus === 'approved') {
         return ['approved', 'failingCI'];
@@ -38,15 +34,10 @@ export async function calculateRequiredLabels(
   return [reviewStatus];
 }
 
-export async function syncPullRequestLabels(
-  context: Context,
-  pr: PullRequest,
-  options: LabelCalcOptions = {},
-) {
+export async function syncPullRequestLabels(context: Context, pr: PullRequest) {
   const includeFailingCI = await checkFeatureFlag(context, 'enableFailingCI');
   const requiredLabels = await calculateRequiredLabels(pr, {
     includeFailingCI,
-    failingCiSha: options.failingCiSha,
   });
 
   if (requiredLabels.length === 0) {

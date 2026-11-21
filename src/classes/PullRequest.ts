@@ -3,6 +3,7 @@ import { Context, ProbotOctokit } from 'probot';
 import { labels } from '../labels.js';
 
 const COPILOT_USER_ID = 198982749;
+const CODERABBIT_LOGIN = 'coderabbitai[bot]';
 
 type TContext = Context<
   'pull_request' | 'pull_request_review' | 'pull_request_review_comment'
@@ -69,6 +70,34 @@ export default class PullRequest {
     });
   }
 
+  // check_suite payloads carry no PR for PRs opened from forks, and the
+  // commit -> PR lookup is empty for them too, so match on the head SHA.
+  // ponytail: lists every open PR per event; switch to search if that gets slow
+  // Several open PRs can share a head commit, so this returns all of them.
+  static async getAllFromHeadSha(context: BarebonesContext, sha: string) {
+    const openPulls = await context.octokit.paginate(
+      context.octokit.pulls.list,
+      {
+        owner: context.payload.repository.owner.login,
+        repo: context.payload.repository.name,
+        state: 'open',
+        per_page: 100,
+      },
+    );
+    return openPulls
+      .filter(p => p.head.sha === sha)
+      .map(
+        data =>
+          new PullRequest({
+            ...context,
+            payload: {
+              ...context.payload,
+              pull_request: data,
+            },
+          }),
+      );
+  }
+
   get additionalLabels() {
     const labelNames = Object.values(labels).map(l => l.name);
     return this.data.labels
@@ -112,12 +141,12 @@ export default class PullRequest {
     });
   }
 
-  async hasFailingCI(ref?: string): Promise<boolean> {
+  async hasFailingCI(): Promise<boolean> {
     const suites = (
       await this.octokit.checks.listSuitesForRef({
         owner: this.owner,
         repo: this.repo,
-        ref: ref ?? this.data.head.sha,
+        ref: this.data.head.sha,
       })
     ).data.check_suites;
 
@@ -154,19 +183,41 @@ export default class PullRequest {
   }
 
   async getReviewStatus(): Promise<ReviewStatus> {
-    const reviews = (
-      await this.octokit.pulls.listReviews({
+    // Reviews come oldest first, so every page is needed to see the latest.
+    const everyReview = await this.octokit.paginate(
+      this.octokit.pulls.listReviews,
+      {
         owner: this.owner,
         repo: this.repo,
         pull_number: this.number,
-      })
-    ).data.filter(
-      r =>
-        r.commit_id === this.data.head.sha &&
-        ['APPROVED', 'CHANGES_REQUESTED'].includes(r.state),
+      },
+    );
+    const allReviews = everyReview.filter(r =>
+      ['APPROVED', 'CHANGES_REQUESTED'].includes(r.state),
     );
 
-    if (reviews.length < 1) return 'readyForReview';
+    // CodeRabbit has no write access, so it never counts as a reviewer below.
+    // Its latest verdict stands across pushes (it approves once its comments
+    // are resolved), and only blocks while no maintainer has reviewed.
+    // Dismissed verdicts are kept in the running so that dismissing the latest
+    // one clears it rather than reviving an older one.
+    const codeRabbitVerdict = everyReview
+      .filter(
+        r => r.user?.login === CODERABBIT_LOGIN && r.state !== 'COMMENTED',
+      )
+      .at(-1)?.state;
+    const unreviewed: ReviewStatus =
+      codeRabbitVerdict === 'CHANGES_REQUESTED'
+        ? 'changesRequested'
+        : 'readyForReview';
+
+    const reviews = allReviews.filter(
+      r =>
+        r.commit_id === this.data.head.sha &&
+        r.user?.login !== CODERABBIT_LOGIN,
+    );
+
+    if (reviews.length < 1) return unreviewed;
 
     const latestReviewsObj: {
       [key: number]: {
@@ -218,7 +269,7 @@ export default class PullRequest {
       pushReviewers.includes(userId),
     );
 
-    if (!latestReviews.length) return 'readyForReview';
+    if (!latestReviews.length) return unreviewed;
 
     if (latestReviews.filter(r => r.state === 'CHANGES_REQUESTED').length > 0) {
       return 'changesRequested';
@@ -241,7 +292,9 @@ export default class PullRequest {
       return 'approved';
     }
 
-    return 'readyForReview';
+    // Only reached when the sole approval is the excluded Copilot task
+    // initiator's, which leaves the PR effectively unreviewed.
+    return unreviewed;
   }
 
   async isOrgMember(username: string): Promise<boolean> {
