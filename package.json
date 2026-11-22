@@ -31,8 +31,8 @@
     "@octokit/types": "^13.5.0",
     "@octokit/webhooks-types": "^7.5.1",
     "@types/node": "22.0.0",
-    "@typescript-eslint/eslint-plugin": "^7.13.1",
-    "@typescript-eslint/parser": "^7.13.1",
+    "@typescript-eslint/eslint-plugin": "^8.73.0",
+    "@typescript-eslint/parser": "^8.73.0",
     "@vitest/coverage-v8": "^5.1.0",
     "eslint": "^8.57.0",
     "eslint-config-prettier": "^9.1.0",
@@ -48,7 +48,8 @@
     "node": "^22.12.0 || ^24.0.0 || >=26.0.0"
   },
   "resolutions": {
-    "rollup": "npm:@rollup/wasm-node@*"
+    "rollup": "npm:@rollup/wasm-node@*",
+    "@sentry/node/cookie": "^0.7.0"
   },
   "type": "module",
   "packageManager": "yarn@4.12.0"
