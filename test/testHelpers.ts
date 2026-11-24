@@ -18,15 +18,22 @@ type CheckSuite = {
 
 type ConfigOptions = {
   enableFailingCI?: boolean;
+  enableQA?: boolean;
   checkSuites?: CheckSuite[];
   checkRunsBySuite?: Record<number, unknown[]>;
 };
 
-export const mockConfig = ({ enableFailingCI = true }: ConfigOptions = {}) =>
+export const mockConfig = ({
+  enableFailingCI = true,
+  enableQA = false,
+}: ConfigOptions = {}) =>
   nock('https://api.github.com')
     .persist()
     .get('/repos/your-repo/your-repo-name/contents/.github%2Factual-gh-bot.yml')
-    .reply(200, `featureFlags:\n  enableFailingCI: ${enableFailingCI}\n`);
+    .reply(
+      200,
+      `featureFlags:\n  enableFailingCI: ${enableFailingCI}\n  enableQA: ${enableQA}\n`,
+    );
 
 export const mockCheckSuites = ({
   checkSuites = [],

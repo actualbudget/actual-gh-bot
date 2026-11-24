@@ -1,6 +1,7 @@
 import { Probot } from 'probot';
 
 import PullRequest from '../classes/PullRequest.js';
+import { hidePreviousQAComments } from '../qa.js';
 
 export default (app: Probot) => {
   app.on(['issue_comment.created'], async context => {
@@ -9,6 +10,12 @@ export default (app: Probot) => {
 
     const commenter = context.payload.comment.user?.login;
     if (!commenter) return;
+
+    // Bots are never org members, but they do post QA results
+    if (context.payload.comment.user?.type === 'Bot') {
+      await hidePreviousQAComments(context);
+      return;
+    }
 
     const pr = await PullRequest.getFromNumber(
       context,

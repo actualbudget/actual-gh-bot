@@ -3,6 +3,7 @@ import { Probot } from 'probot';
 import PullRequest from '../classes/PullRequest.js';
 import { labels } from '../labels.js';
 import { syncPullRequestLabels } from '../labels/labelCalculator.js';
+import { restartActiveQA, startQA } from '../qa.js';
 
 export default (app: Probot) => {
   app.on(['pull_request.opened', 'pull_request.reopened'], async context => {
@@ -16,6 +17,8 @@ export default (app: Probot) => {
     }
 
     await syncPullRequestLabels(context, pr);
+
+    if (context.payload.action === 'opened') await startQA(context);
   });
 
   app.on(['pull_request.edited'], async context => {
@@ -38,6 +41,7 @@ export default (app: Probot) => {
     const pr = new PullRequest(context);
 
     await syncPullRequestLabels(context, pr);
+    await restartActiveQA(context);
   });
 
   app.on(['pull_request.closed'], async context => {

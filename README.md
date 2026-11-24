@@ -8,6 +8,7 @@ Node.js 22.12+, 24, or 26+ is required.
 
 ## Features
 - Automated pull request labelling based on status
+- Automated QA of pull requests by a Claude session (opt-in, see [Pull Request QA](#pull-request-qa))
 
 ## Installation
 
@@ -48,6 +49,58 @@ The Actual GitHub Bot allows repository-specific configurations through the `.gi
 #### Configuration Options
 
 - `featureFlags.enableFailingCI`: This boolean flag controls whether the bot should watch for failed CI runs and apply the "Failing CI" label. Default value: `true`
+- `featureFlags.enableQA`: This boolean flag controls whether the bot starts a QA session for pull requests. Default value: `false`
+- `qaWorkflow`: File name of the GitHub Actions workflow that runs the QA session. Default value: `pr-qa.yml`
+
+### Pull Request QA
+
+When `enableQA` is on, the bot drives a GitHub Actions workflow in the repository that runs Claude to QA the change:
+
+- **PR opened**: the bot dispatches the QA workflow (`workflow_dispatch`) on the default branch with the inputs `pr_number` and `head_sha`. PRs opened by bots are skipped.
+- **New commit pushed while a QA run is active**: the bot cancels the active run(s) for that PR and dispatches a new one. Nothing happens if no run is active.
+- **QA comment posted**: the bot hides (minimizes as outdated) all previous QA comments on the PR.
+
+The GitHub App needs the **Actions: Read and write** repository permission for this.
+
+The workflow has to follow this contract:
+
+- `run-name` must be exactly `PR QA #<pr_number>`; this is how the bot finds the active run of a PR.
+- The result comment must be posted by a bot account (e.g. the workflow's `GITHUB_TOKEN`) and contain the marker `<!-- actual-bot-qa -->`.
+
+A starting point:
+
+```yaml
+name: PR QA
+run-name: 'PR QA #${{ inputs.pr_number }}'
+
+on:
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        required: true
+      head_sha:
+        required: true
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  qa:
+    runs-on: ubuntu-latest
+    steps:
+      # Checks out the default branch, NOT the PR: this job holds secrets, so
+      # it must never execute code from the PR. QA the PR's deploy preview.
+      - uses: actions/checkout@v4
+      - uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          prompt: |
+            QA pull request #${{ inputs.pr_number }} at commit ${{ inputs.head_sha }}.
+            Record before/after screenshots or videos, validate that the problem
+            is fixed and that there are no regressions, then post the results as
+            a single PR comment that starts with `<!-- actual-bot-qa -->`.
+```
 
 ## Contributing
 
