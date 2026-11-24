@@ -67,40 +67,7 @@ The workflow has to follow this contract:
 - `run-name` must be exactly `PR QA #<pr_number>`; this is how the bot finds the active run of a PR.
 - The result comment must be posted by a bot account (e.g. the workflow's `GITHUB_TOKEN`) and contain the marker `<!-- actual-bot-qa -->`.
 
-A starting point:
-
-```yaml
-name: PR QA
-run-name: 'PR QA #${{ inputs.pr_number }}'
-
-on:
-  workflow_dispatch:
-    inputs:
-      pr_number:
-        required: true
-      head_sha:
-        required: true
-
-permissions:
-  contents: read
-  pull-requests: write
-
-jobs:
-  qa:
-    runs-on: ubuntu-latest
-    steps:
-      # Checks out the default branch, NOT the PR: this job holds secrets, so
-      # it must never execute code from the PR. QA the PR's deploy preview.
-      - uses: actions/checkout@v4
-      - uses: anthropics/claude-code-action@v1
-        with:
-          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          prompt: |
-            QA pull request #${{ inputs.pr_number }} at commit ${{ inputs.head_sha }}.
-            Record before/after screenshots or videos, validate that the problem
-            is fixed and that there are no regressions, then post the results as
-            a single PR comment that starts with `<!-- actual-bot-qa -->`.
-```
+The workflow runs for pull requests from forks, so it must treat everything derived from the pull request as untrusted: never check out or execute PR code, give the agent no GitHub token and no shell, and post the comment from a separate job that validates the agent's output. See `.github/workflows/pr-qa.yml` in [actualbudget/actual](https://github.com/actualbudget/actual) for the reference implementation.
 
 ## Contributing
 
