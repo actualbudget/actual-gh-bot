@@ -15,7 +15,7 @@ export async function calculateRequiredLabels(
     return [];
   }
 
-  if (!pr.isDependabot && (pr.data.draft || pr.wip)) {
+  if (!pr.isDependabot && pr.data.draft) {
     return ['wip'];
   }
 
