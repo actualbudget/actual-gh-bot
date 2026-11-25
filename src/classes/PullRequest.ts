@@ -128,28 +128,38 @@ export default class PullRequest {
   }
 
   async hasFailingCI(): Promise<boolean> {
-    const suites = (
-      await this.octokit.checks.listSuitesForRef({
+    const suites = await this.octokit.paginate(
+      this.octokit.checks.listSuitesForRef,
+      {
         owner: this.owner,
         repo: this.repo,
         ref: this.data.head.sha,
-      })
-    ).data.check_suites;
+        per_page: 100,
+      },
+    );
 
-    const runs = [];
-    for (const suite of suites) {
-      const run = (
-        await this.octokit.checks.listForSuite({
+    const latestRunsByChecks = new Map<
+      string,
+      { conclusion: string | null }[]
+    >();
+    for (const suite of suites.sort((a, b) => a.id - b.id)) {
+      const runs = await this.octokit.paginate(
+        this.octokit.checks.listForSuite,
+        {
           owner: this.owner,
           repo: this.repo,
           check_suite_id: suite.id,
-        })
-      ).data.check_runs;
+          per_page: 100,
+        },
+      );
 
-      runs.push(...run);
+      const checkNames = runs.map(r => r.name).sort();
+      latestRunsByChecks.set(JSON.stringify([suite.app?.id, checkNames]), runs);
     }
 
-    return runs.some(r => r.conclusion === 'failure');
+    return [...latestRunsByChecks.values()]
+      .flat()
+      .some(r => r.conclusion === 'failure');
   }
 
   async getRequiredReviews() {

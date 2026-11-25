@@ -35,7 +35,10 @@ export const mockCheckSuites = ({
   nock('https://api.github.com')
     .persist()
     .get(/\/repos\/your-repo\/your-repo-name\/commits\/[^/]+\/check-suites/)
-    .reply(200, { check_suites: checkSuites });
+    .reply(200, {
+      total_count: checkSuites.length,
+      check_suites: checkSuites,
+    });
 
   for (const suite of checkSuites) {
     nock('https://api.github.com')
@@ -43,7 +46,11 @@ export const mockCheckSuites = ({
       .get(
         `/repos/your-repo/your-repo-name/check-suites/${suite.id}/check-runs`,
       )
-      .reply(200, { check_runs: checkRunsBySuite[suite.id] ?? [] });
+      .query(true)
+      .reply(200, {
+        total_count: (checkRunsBySuite[suite.id] ?? []).length,
+        check_runs: checkRunsBySuite[suite.id] ?? [],
+      });
   }
 };
 
