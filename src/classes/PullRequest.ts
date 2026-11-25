@@ -128,6 +128,33 @@ export default class PullRequest {
   }
 
   async hasFailingCI(): Promise<boolean> {
+    const workflowRuns = await this.octokit.paginate(
+      this.octokit.actions.listWorkflowRunsForRepo,
+      {
+        owner: this.owner,
+        repo: this.repo,
+        head_sha: this.data.head.sha,
+        per_page: 100,
+      },
+    );
+
+    const latestRuns = new Map<string, (typeof workflowRuns)[number]>();
+    for (const run of workflowRuns) {
+      const key = `${run.workflow_id}:${run.event}`;
+      const latest = latestRuns.get(key);
+      if (latest == null || run.run_number > latest.run_number) {
+        latestRuns.set(key, run);
+      }
+    }
+    const latestSuiteIds = new Set(
+      [...latestRuns.values()].map(run => run.check_suite_id),
+    );
+    const supersededSuiteIds = new Set(
+      workflowRuns
+        .map(run => run.check_suite_id)
+        .filter(id => !latestSuiteIds.has(id)),
+    );
+
     const suites = await this.octokit.paginate(
       this.octokit.checks.listSuitesForRef,
       {
@@ -138,11 +165,10 @@ export default class PullRequest {
       },
     );
 
-    const latestRunsByChecks = new Map<
-      string,
-      { conclusion: string | null }[]
-    >();
-    for (const suite of suites.sort((a, b) => a.id - b.id)) {
+    for (const suite of suites) {
+      if (supersededSuiteIds.has(suite.id)) {
+        continue;
+      }
       const runs = await this.octokit.paginate(
         this.octokit.checks.listForSuite,
         {
@@ -152,14 +178,12 @@ export default class PullRequest {
           per_page: 100,
         },
       );
-
-      const checkNames = runs.map(r => r.name).sort();
-      latestRunsByChecks.set(JSON.stringify([suite.app?.id, checkNames]), runs);
+      if (runs.some(r => r.conclusion === 'failure')) {
+        return true;
+      }
     }
 
-    return [...latestRunsByChecks.values()]
-      .flat()
-      .some(r => r.conclusion === 'failure');
+    return false;
   }
 
   async getRequiredReviews() {
