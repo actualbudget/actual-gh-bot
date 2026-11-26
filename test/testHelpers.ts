@@ -16,10 +16,18 @@ type CheckSuite = {
   id: number;
 };
 
+type WorkflowRun = {
+  check_suite_id: number;
+  workflow_id: number;
+  event: string;
+  run_number: number;
+};
+
 type ConfigOptions = {
   enableFailingCI?: boolean;
   checkSuites?: CheckSuite[];
   checkRunsBySuite?: Record<number, unknown[]>;
+  workflowRuns?: WorkflowRun[];
 };
 
 export const mockConfig = ({ enableFailingCI = true }: ConfigOptions = {}) =>
@@ -31,11 +39,27 @@ export const mockConfig = ({ enableFailingCI = true }: ConfigOptions = {}) =>
 export const mockCheckSuites = ({
   checkSuites = [],
   checkRunsBySuite = {},
-}: Pick<ConfigOptions, 'checkSuites' | 'checkRunsBySuite'> = {}) => {
+  workflowRuns = [],
+}: Pick<
+  ConfigOptions,
+  'checkSuites' | 'checkRunsBySuite' | 'workflowRuns'
+> = {}) => {
+  nock('https://api.github.com')
+    .persist()
+    .get('/repos/your-repo/your-repo-name/actions/runs')
+    .query(true)
+    .reply(200, {
+      total_count: workflowRuns.length,
+      workflow_runs: workflowRuns,
+    });
+
   nock('https://api.github.com')
     .persist()
     .get(/\/repos\/your-repo\/your-repo-name\/commits\/[^/]+\/check-suites/)
-    .reply(200, { check_suites: checkSuites });
+    .reply(200, {
+      total_count: checkSuites.length,
+      check_suites: checkSuites,
+    });
 
   for (const suite of checkSuites) {
     nock('https://api.github.com')
@@ -43,7 +67,11 @@ export const mockCheckSuites = ({
       .get(
         `/repos/your-repo/your-repo-name/check-suites/${suite.id}/check-runs`,
       )
-      .reply(200, { check_runs: checkRunsBySuite[suite.id] ?? [] });
+      .query(true)
+      .reply(200, {
+        total_count: (checkRunsBySuite[suite.id] ?? []).length,
+        check_runs: checkRunsBySuite[suite.id] ?? [],
+      });
   }
 };
 
